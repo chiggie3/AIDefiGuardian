@@ -1,0 +1,12 @@
+# Compiler files
+cache/
+out/
+
+# Environment
+.env
+
+# Dependencies
+node_modules/
+
+# OS
+.DS_Store

@@ -1,0 +1,11 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+remappings = [
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+]
+
+[profile.fork]
+# Fork 测试用，继承 default 配置
+# 运行方式: SEPOLIA_RPC_URL=<your_rpc_url> forge test --match-contract GuardianForkTest -vvv
