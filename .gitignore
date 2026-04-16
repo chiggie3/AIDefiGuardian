@@ -34,7 +34,7 @@ Thumbs.db
 
 # Private dev notes (local only)
 CLAUDE.md
-FORK_TEST_GUIDE.md
+dev-test-guide.md
 
 # Agent
 agent/agent.log

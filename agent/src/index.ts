@@ -16,7 +16,7 @@ import * as executor from "./executePayment";
 const MOCK_MODE = process.env.MOCK_MODE === "true";
 const POLL_INTERVAL_MS = MOCK_MODE
   ? 10 * 1000   // mock mode: 10s per cycle for easy observation
-  : 5 * 60 * 1000; // production mode: 5 minutes per cycle
+  : Number(process.env.POLL_INTERVAL_MS) || 5 * 60 * 1000; // production: 5min default, configurable
 const MAX_CYCLES = MOCK_MODE
   ? 5                                          // mock mode: stop after 5 cycles
   : Number(process.env.MAX_CYCLES) || Infinity; // production: infinite by default, configurable via env

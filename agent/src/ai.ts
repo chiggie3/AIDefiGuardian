@@ -12,48 +12,55 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // --- System Prompt: defines Claude's role and output format ---
 
-const SYSTEM_PROMPT = `You are a DeFi risk management AI responsible for protecting users' Aave lending positions from liquidation.
+const SYSTEM_PROMPT = `You are a DeFi risk management AI protecting users' Aave positions from liquidation.
 
-You will receive real-time data about a user's position and must decide whether to execute a repayment.
+You receive pre-computed flags and position data. Use the flags directly — do not re-evaluate them.
 
-Decision criteria:
-1. Health factor below threshold AND ETH still declining → recommend repay
-2. Health factor below threshold BUT ETH has rebounded or stabilized → recommend monitor
-3. Protection budget insufficient to meaningfully improve health factor → recommend alert_only
-4. When uncertain → conservatively choose monitor
+DECISION LOGIC (follow strictly):
+1. If "Budget sufficient" is NO → action: "alert_only"
+2. If "HF below threshold" is YES AND "ETH declining" is YES → action: "repay"
+3. If "HF below threshold" is YES AND "ETH declining" is NO → action: "repay" if urgency is "high" or "critical", otherwise "monitor"
+4. If "HF below threshold" is NO → action: "monitor"
 
-Repayment amount principles:
-- Must not exceed the user's configured max repay per transaction (maxRepayPerTx)
-- Must not exceed the user's available protection budget
-- Must not exceed the user's total debt
-- Higher urgency should use amounts closer to the maximum
-- At critical urgency, use the full maximum
+REPAYMENT AMOUNT (when action is "repay"):
+- Use maxRepayPerTx as the amount
+- But cap at: min(maxRepayPerTx, budget, totalDebt)
+- At high/critical urgency, always use the full maximum allowed
 
-You must return only valid JSON in this format:
+IMPORTANT: A single repayment of maxRepayPerTx does NOT need to cover the full debt. Even a partial repayment significantly improves the health factor. Your job is to protect, not to fully repay.
+
+Return ONLY valid JSON:
 {
-  "action": "repay" or "monitor" or "alert_only",
-  "amount": "300",
-  "reasoning": "Brief explanation in under 100 words"
+  "action": "repay" | "monitor" | "alert_only",
+  "amount": "500",
+  "reasoning": "Brief explanation under 100 words"
 }
 
-amount field: in USDC, only relevant when action is repay, otherwise "0".
-Do not return anything other than JSON.`;
+amount: in USDC. Set to "0" when action is not "repay".`;
 
 // --- Build User Prompt ---
 function buildPrompt(ctx: AgentContext): string {
-  return `Current position data:
-- User address: ${ctx.user}
-- Health factor: ${ctx.hf} (protection threshold: ${ctx.policy.healthFactorThreshold})
-- Urgency level: ${ctx.urgency}
-- ETH current price: $${ctx.marketData.currentPrice}
-- ETH 1h price change: ${ctx.marketData.ethPriceChange1h.toFixed(2)}%
-- ETH 24h price change: ${ctx.marketData.ethPriceChange24h.toFixed(2)}%
-- Available protection budget: ${ctx.budget} USDC
-- User total debt: ${ctx.totalDebt} USDC
-- Max repay per transaction: ${ctx.policy.maxRepayPerTx} USDC
-- Time since last protection: ${ctx.timeSinceLastExecution} minutes
+  const belowThreshold = ctx.hf < ctx.policy.healthFactorThreshold;
+  const ethDeclining = ctx.marketData.ethPriceChange1h < 0 || ctx.marketData.ethPriceChange24h < 0;
+  const budgetSufficient = ctx.budget >= ctx.policy.maxRepayPerTx;
+  const maxAllowed = Math.min(ctx.policy.maxRepayPerTx, ctx.budget, ctx.totalDebt);
 
-Please provide your decision.`;
+  return `=== Pre-computed Flags ===
+HF below threshold: ${belowThreshold ? "YES" : "NO"}
+ETH declining: ${ethDeclining ? "YES" : "NO"}
+Budget sufficient: ${budgetSufficient ? "YES" : "NO"}
+Urgency: ${ctx.urgency}
+
+=== Position Data ===
+Health factor: ${ctx.hf} (threshold: ${ctx.policy.healthFactorThreshold})
+ETH price: $${ctx.marketData.currentPrice} | 1h: ${ctx.marketData.ethPriceChange1h.toFixed(2)}% | 24h: ${ctx.marketData.ethPriceChange24h.toFixed(2)}%
+Protection budget: ${ctx.budget} USDC
+Total debt: ${ctx.totalDebt} USDC
+Max repay per tx: ${ctx.policy.maxRepayPerTx} USDC
+Max allowed repay amount: ${maxAllowed} USDC
+Time since last protection: ${ctx.timeSinceLastExecution} minutes
+
+Provide your decision.`;
 }
 
 // --- Parse Claude's JSON response ---
