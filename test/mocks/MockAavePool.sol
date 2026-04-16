@@ -5,15 +5,15 @@ import "../../src/interfaces/IAavePool.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract MockAavePool is IAavePool {
-    // 可控的 HF 返回值
+    // Controllable HF return values
     mapping(address => uint256) public healthFactors;
-    // 记录 repay 调用
+    // Record repay calls
     uint256 public lastRepayAmount;
     address public lastRepayUser;
     address public lastRepayAsset;
     uint256 public repayCallCount;
 
-    // mock variableDebtToken 地址
+    // Mock variableDebtToken address
     address public mockDebtToken;
 
     function setHealthFactor(address user, uint256 hf) external {
@@ -45,7 +45,7 @@ contract MockAavePool is IAavePool {
         lastRepayAmount = amount;
         lastRepayUser = onBehalfOf;
         repayCallCount++;
-        // 模拟从调用者转入 USDC
+        // Simulate transferring USDC from caller
         IERC20(asset).transferFrom(msg.sender, address(this), amount);
         return amount;
     }
@@ -56,7 +56,7 @@ contract MockAavePool is IAavePool {
         return data;
     }
 
-    // Fork 测试接口，mock 中不需要实现
+    // Fork test interface; not needed in mock
     function supply(address, uint256, address, uint16) external {}
     function borrow(address, uint256, uint256, uint16, address) external {}
 }

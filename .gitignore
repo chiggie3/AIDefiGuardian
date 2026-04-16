@@ -2,11 +2,39 @@
 cache/
 out/
 
-# Environment
+# Foundry broadcast (contains deployment artifacts & private key references)
+broadcast/
+
+# Environment (all .env files across project)
 .env
+agent/.env
+frontend/.env
 
 # Dependencies
 node_modules/
+lib/
+
+# Build output
+dist/
+frontend/dist/
+
+# Logs
+*.log
 
 # OS
 .DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code
+.claude/
+
+# Private dev notes (local only)
+CLAUDE.md
+FORK_TEST_GUIDE.md
+
+# Agent
+agent/agent.log

@@ -52,7 +52,7 @@ contract GuardianVault is ERC4626, ReentrancyGuard, Pausable {
 
         uint256 hfBefore = aaveIntegration.getHealthFactor(user);
 
-        // 两级冷却：正常冷却 + 紧急豁免（HF < 阈值 - 0.2）
+        // Two-tier cooldown: normal cooldown + emergency bypass (HF < threshold - 0.2)
         {
             bool inCooldown = policy.lastExecutionTime > 0 && block.timestamp < policy.lastExecutionTime + policy.cooldownPeriod;
             bool isEmergency = hfBefore < policy.healthFactorThreshold - 0.2e18;
@@ -62,7 +62,7 @@ contract GuardianVault is ERC4626, ReentrancyGuard, Pausable {
         require(repayAmount <= policy.maxRepayPerTx, "Exceeds max repay");
         require(convertToAssets(balanceOf(user)) >= repayAmount, "Insufficient budget");
 
-        // 实际还款不超过用户债务
+        // Actual repay amount capped at user's debt
         uint256 actualRepay;
         {
             uint256 userDebt = aaveIntegration.getUserDebt(user);
@@ -70,14 +70,14 @@ contract GuardianVault is ERC4626, ReentrancyGuard, Pausable {
         }
         require(actualRepay > 0, "No debt to repay");
 
-        // 协议费 0.1%
+        // Protocol fee 0.1%
         uint256 fee = actualRepay * 10 / 10_000;
 
-        // 从用户份额中取出 USDC
-        // caller=user 跳过 allowance 检查，receiver=vault 保留 USDC 在合约中
+        // Withdraw USDC from user's shares
+        // caller=user skips allowance check, receiver=vault keeps USDC in the contract
         _withdraw(user, address(this), user, actualRepay, previewWithdraw(actualRepay));
 
-        // fee 转 treasury，剩余转给 AaveIntegration 执行还款
+        // Transfer fee to treasury, send remainder to AaveIntegration for repayment
         IERC20(asset()).transfer(protocolTreasury, fee);
         IERC20(asset()).transfer(address(aaveIntegration), actualRepay - fee);
         aaveIntegration.repayOnBehalf(user, actualRepay - fee);
@@ -88,7 +88,7 @@ contract GuardianVault is ERC4626, ReentrancyGuard, Pausable {
             user, actualRepay, hfBefore, aaveIntegration.getHealthFactor(user), aiReasoning, block.timestamp
         );
 
-        // 低余额预警
+        // Low balance warning
         uint256 remaining = convertToAssets(balanceOf(user));
         if (remaining < policy.maxRepayPerTx) {
             emit BudgetLow(user, remaining);

@@ -39,7 +39,7 @@ contract GuardianRegistryTest is Test {
         registry.setVault(makeAddr("newVault"));
     }
 
-    // ========== setPolicy 正常路径 ==========
+    // ========== setPolicy happy path ==========
 
     function test_SetPolicy_Success() public {
         vm.prank(user1);
@@ -70,18 +70,18 @@ contract GuardianRegistryTest is Test {
     }
 
     function test_UpdatePolicy_PreservesLastExecutionTime() public {
-        // 先设置策略
+        // Set initial policy
         vm.prank(user1);
         registry.setPolicy(1.3e18, 500e6, 3600);
 
-        // 模拟 vault 记录执行时间
+        // Simulate vault recording execution time
         vm.prank(vault);
         registry.recordExecution(user1);
 
         uint256 execTime = registry.getPolicy(user1).lastExecutionTime;
         assertGt(execTime, 0);
 
-        // 更新策略，lastExecutionTime 应该保留
+        // Update policy; lastExecutionTime should be preserved
         vm.prank(user1);
         registry.setPolicy(1.5e18, 300e6, 7200);
 
@@ -103,7 +103,7 @@ contract GuardianRegistryTest is Test {
         assertEq(users.length, 1);
     }
 
-    // ========== setPolicy 边界值 ==========
+    // ========== setPolicy boundary values ==========
 
     function test_SetPolicy_ThresholdTooLow_Reverts() public {
         vm.prank(user1);
@@ -175,14 +175,14 @@ contract GuardianRegistryTest is Test {
     }
 
     function test_Deactivate_ThenReactivate_AddsDuplicate() public {
-        // 停用后重新激活会再次 push 到 registeredUsers（计划中的去重逻辑）
+        // Deactivating then reactivating pushes to registeredUsers again (planned dedup logic)
         vm.startPrank(user1);
         registry.setPolicy(1.3e18, 500e6, 3600);
         registry.deactivate();
         registry.setPolicy(1.3e18, 500e6, 3600);
         vm.stopPrank();
 
-        // active=false 时再 setPolicy 会 push，所以 length=2
+        // When active=false, setPolicy pushes again, so length=2
         address[] memory users = registry.getRegisteredUsers();
         assertEq(users.length, 2);
     }
@@ -209,7 +209,7 @@ contract GuardianRegistryTest is Test {
         registry.recordExecution(user1);
     }
 
-    // ========== getRegisteredUsers 多用户 ==========
+    // ========== getRegisteredUsers multiple users ==========
 
     function test_MultipleUsers() public {
         vm.prank(user1);
@@ -224,7 +224,7 @@ contract GuardianRegistryTest is Test {
         assertEq(users[1], user2);
     }
 
-    // ========== getPolicy 未注册用户 ==========
+    // ========== getPolicy unregistered user ==========
 
     function test_GetPolicy_UnregisteredUser_ReturnsDefault() public view {
         GuardianRegistry.Policy memory p = registry.getPolicy(address(0xdead));

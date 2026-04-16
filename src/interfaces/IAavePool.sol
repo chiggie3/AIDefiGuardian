@@ -38,7 +38,7 @@ interface IAavePool {
 
     function getReserveData(address asset) external view returns (ReserveData memory);
 
-    // 以下函数仅在 fork 集成测试中使用（模拟用户在 Aave 中的借贷操作）
+    // The following functions are only used in fork integration tests (to simulate user lending/borrowing on Aave)
     function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
     function borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf) external;
 }

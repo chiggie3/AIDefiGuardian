@@ -7,5 +7,5 @@ remappings = [
 ]
 
 [profile.fork]
-# Fork 测试用，继承 default 配置
-# 运行方式: SEPOLIA_RPC_URL=<your_rpc_url> forge test --match-contract GuardianForkTest -vvv
+# For fork tests, inherits default config
+# Run with: SEPOLIA_RPC_URL=<your_rpc_url> forge test --match-contract GuardianForkTest -vvv

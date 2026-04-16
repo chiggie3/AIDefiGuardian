@@ -8,21 +8,21 @@ import "../../src/AaveIntegration.sol";
 import "../../src/interfaces/IAavePool.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-/// @notice Fork Sepolia 真实 Aave V3 合约的集成测试
-/// 运行方式: SEPOLIA_RPC_URL=<url> forge test --match-contract GuardianForkTest -vvv
+/// @notice Integration tests against real Aave V3 contracts on a forked Sepolia network
+/// Run with: SEPOLIA_RPC_URL=<url> forge test --match-contract GuardianForkTest -vvv
 contract GuardianForkTest is Test {
-    // ========== Aave V3 Sepolia 地址 ==========
+    // ========== Aave V3 Sepolia addresses ==========
     address constant AAVE_POOL = 0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951;
     address constant USDC = 0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8;
     address constant WETH = 0xC558DBdd856501FCd9aaF1E62eae57A9F0629a3c;
     address constant ADDRESSES_PROVIDER = 0x012bAC54348C0E635dCAc9D5FB99f06F24136C9A;
 
-    // ========== 项目合约 ==========
+    // ========== Project contracts ==========
     GuardianRegistry public registry;
     GuardianVault public vault;
     AaveIntegration public aaveIntegration;
 
-    // ========== 测试角色 ==========
+    // ========== Test roles ==========
     address public owner;
     address public agent;
     address public treasury;
@@ -42,14 +42,14 @@ contract GuardianForkTest is Test {
 
         aavePool = IAavePool(AAVE_POOL);
 
-        // 动态获取 Oracle 地址
+        // Dynamically fetch Oracle address
         (bool ok, bytes memory data) = ADDRESSES_PROVIDER.staticcall(
             abi.encodeWithSignature("getPriceOracle()")
         );
         require(ok, "Failed to get oracle");
         aaveOracle = abi.decode(data, (address));
 
-        // 部署项目合约
+        // Deploy project contracts
         registry = new GuardianRegistry();
         aaveIntegration = new AaveIntegration(AAVE_POOL, USDC);
         vault = new GuardianVault(
@@ -60,23 +60,23 @@ contract GuardianForkTest is Test {
             treasury
         );
 
-        // 打破循环依赖
+        // Break circular dependencies
         registry.setVault(address(vault));
         aaveIntegration.setVault(address(vault));
 
-        // 给测试用户准备资产
+        // Provide assets for the test user
         deal(WETH, testUser, 10e18);
         deal(USDC, testUser, 50_000e6);
 
-        // Sepolia 池子流动性不足且供应上限已满
-        // 直接 deal USDC 到 aToken 合约地址，增加可借流动性
+        // Sepolia pool has insufficient liquidity and supply cap is full
+        // Deal USDC directly to the aToken contract to increase borrowable liquidity
         address USDC_ATOKEN = 0x16dA4541aD1807f4443d92D26044C1147406EB80;
         deal(USDC, USDC_ATOKEN, 500_000e6);
     }
 
-    // ========== 辅助函数 ==========
+    // ========== Helper functions ==========
 
-    /// @dev 用户在 Aave 中存 WETH 借 USDC，创建一个借贷仓位
+    /// @dev User supplies WETH and borrows USDC on Aave to create a lending position
     function _createAavePosition(address user, uint256 supplyETH, uint256 borrowUSDC) internal {
         vm.startPrank(user);
         IERC20(WETH).approve(AAVE_POOL, supplyETH);
@@ -85,7 +85,7 @@ contract GuardianForkTest is Test {
         vm.stopPrank();
     }
 
-    /// @dev 用户设置 Guardian 策略并存入保护预算
+    /// @dev User sets Guardian policy and deposits protection budget
     function _setupGuardian(address user, uint256 budget) internal {
         vm.startPrank(user);
         registry.setPolicy(1.3e18, 500e6, 3600);
@@ -94,87 +94,87 @@ contract GuardianForkTest is Test {
         vm.stopPrank();
     }
 
-    // ========== 完整保护流程 ==========
+    // ========== Full protection flow ==========
 
     function test_FullProtectionFlow() public {
-        // 1. 用户在 Aave 存 1 ETH，借 USDC
+        // 1. User supplies 1 ETH on Aave and borrows USDC
         _createAavePosition(testUser, 1e18, 1500e6);
 
         uint256 hfAfterBorrow = aaveIntegration.getHealthFactor(testUser);
         emit log_named_uint("HF after borrow", hfAfterBorrow);
         assertGt(hfAfterBorrow, 1.3e18, "HF should be safe after initial borrow");
 
-        // 2. 设置 Guardian 保护策略 + 存入 500 USDC 预算
+        // 2. Set Guardian protection policy + deposit 500 USDC budget
         _setupGuardian(testUser, 500e6);
 
-        // 3. 模拟 ETH 价格下跌 → HF 降低
-        //    通过 mock AaveOracle.getAssetPrice() 来改变 Aave 看到的 ETH 价格
-        //    Aave Oracle 返回 8 位精度（如 ETH=$4000 → 4000_00000000）
-        //    HF = (ETH_price × 0.825) / 1500，要 HF < 1.3 需要 price < $2364
+        // 3. Simulate ETH price drop -> HF decreases
+        //    Mock AaveOracle.getAssetPrice() to change the ETH price Aave sees
+        //    Aave Oracle returns 8-decimal precision (e.g. ETH=$4000 -> 4000_00000000)
+        //    HF = (ETH_price * 0.825) / 1500; for HF < 1.3, need price < $2364
         vm.mockCall(
             aaveOracle,
             abi.encodeWithSignature("getAssetPrice(address)", WETH),
-            abi.encode(2200e8) // ETH 从 ~$4000 跌到 $2200，HF ≈ 1.21
+            abi.encode(2200e8) // ETH drops from ~$4000 to $2200, HF ~ 1.21
         );
 
         uint256 hfAfterDrop = aaveIntegration.getHealthFactor(testUser);
         emit log_named_uint("HF after price drop", hfAfterDrop);
         assertLt(hfAfterDrop, 1.3e18, "HF should be below threshold after price drop");
 
-        // 4. AI Agent 执行保护还款
+        // 4. AI Agent executes protection repayment
         uint256 repayAmount = 300e6;
         vm.prank(agent);
         vault.executeRepayment(testUser, repayAmount, "ETH price dropped to $1500, repaying to protect position");
 
-        // 5. 验证 HF 恢复
+        // 5. Verify HF recovered
         uint256 hfAfterProtection = aaveIntegration.getHealthFactor(testUser);
         emit log_named_uint("HF after protection", hfAfterProtection);
         assertGt(hfAfterProtection, hfAfterDrop, "HF should improve after repayment");
 
-        // 6. 验证资金流转
+        // 6. Verify fund flow
         assertGt(IERC20(USDC).balanceOf(treasury), 0, "Treasury should receive fee");
 
-        // 7. 验证用户 Vault 余额减少
+        // 7. Verify user's Vault balance decreased
         uint256 remaining = vault.convertToAssets(vault.balanceOf(testUser));
         assertLt(remaining, 500e6, "User budget should decrease");
         emit log_named_uint("Remaining budget", remaining);
     }
 
-    // ========== 冷却期阻止重复执行 ==========
+    // ========== Cooldown prevents repeated execution ==========
 
     function test_CooldownPreventsDoubleExecution() public {
         _createAavePosition(testUser, 1e18, 1500e6);
         _setupGuardian(testUser, 1000e6);
 
-        // mock 价格下跌到 HF < 1.3 但 > 1.1（不触发紧急豁免）
+        // Mock price drop so HF < 1.3 but > 1.1 (does not trigger emergency bypass)
         vm.mockCall(
             aaveOracle,
             abi.encodeWithSignature("getAssetPrice(address)", WETH),
             abi.encode(2200e8)
         );
 
-        // 第一次执行成功
+        // First execution succeeds
         vm.prank(agent);
         vault.executeRepayment(testUser, 200e6, "first protection");
 
-        // 冷却期内再次执行被拒（HF 不够紧急）
+        // Second execution within cooldown is rejected (HF not critical enough)
         vm.prank(agent);
         vm.expectRevert("Cooldown period: wait or HF must be critical");
         vault.executeRepayment(testUser, 200e6, "second too soon");
 
-        // 冷却期过后可以执行
+        // Can execute after cooldown period
         vm.warp(block.timestamp + 3601);
         vm.prank(agent);
         vault.executeRepayment(testUser, 200e6, "after cooldown");
     }
 
-    // ========== 紧急豁免冷却期 ==========
+    // ========== Emergency bypasses cooldown ==========
 
     function test_EmergencyBypassesCooldown() public {
         _createAavePosition(testUser, 1e18, 1500e6);
         _setupGuardian(testUser, 1000e6);
 
-        // 价格小幅下跌，HF < 1.3 但 > 1.1
+        // Small price drop, HF < 1.3 but > 1.1
         vm.mockCall(
             aaveOracle,
             abi.encodeWithSignature("getAssetPrice(address)", WETH),
@@ -184,28 +184,28 @@ contract GuardianForkTest is Test {
         vm.prank(agent);
         vault.executeRepayment(testUser, 100e6, "first");
 
-        // 价格继续暴跌 → HF 跌到紧急水平（< threshold - 0.2 = 1.1）
-        // 需要 price < 1500 × 1.1 / 0.825 ≈ $2000
+        // Price crashes further -> HF drops to emergency level (< threshold - 0.2 = 1.1)
+        // Need price < 1500 * 1.1 / 0.825 ~ $2000
         vm.mockCall(
             aaveOracle,
             abi.encodeWithSignature("getAssetPrice(address)", WETH),
-            abi.encode(1800e8) // ETH 暴跌到 $1800
+            abi.encode(1800e8) // ETH crashes to $1800
         );
 
         uint256 hfEmergency = aaveIntegration.getHealthFactor(testUser);
         emit log_named_uint("HF emergency", hfEmergency);
 
-        // 冷却期内但紧急情况，应该可以执行
+        // Within cooldown but emergency situation; should be allowed to execute
         vm.prank(agent);
         vault.executeRepayment(testUser, 200e6, "emergency bypass");
     }
 
-    // ========== 预算耗尽 ==========
+    // ========== Budget exhausted ==========
 
     function test_BudgetExhausted_Reverts() public {
         _createAavePosition(testUser, 1e18, 1500e6);
 
-        // 只存 100 USDC 预算
+        // Deposit only 100 USDC budget
         vm.startPrank(testUser);
         registry.setPolicy(1.3e18, 500e6, 3600);
         IERC20(USDC).approve(address(vault), 100e6);
@@ -218,19 +218,19 @@ contract GuardianForkTest is Test {
             abi.encode(2200e8)
         );
 
-        // 请求还 500 但只有 100 预算
+        // Request 500 repay but only 100 budget available
         vm.prank(agent);
         vm.expectRevert("Insufficient budget");
         vault.executeRepayment(testUser, 500e6, "not enough budget");
     }
 
-    // ========== 策略未激活 ==========
+    // ========== Inactive policy blocks execution ==========
 
     function test_InactivePolicyBlocks() public {
         _createAavePosition(testUser, 1e18, 1500e6);
         _setupGuardian(testUser, 500e6);
 
-        // 用户停用策略
+        // User deactivates policy
         vm.prank(testUser);
         registry.deactivate();
 
@@ -245,24 +245,24 @@ contract GuardianForkTest is Test {
         vault.executeRepayment(testUser, 300e6, "policy inactive");
     }
 
-    // ========== 验证真实 Aave 数据读取 ==========
+    // ========== Verify real Aave data reads ==========
 
     function test_ReadRealAaveData() public {
         _createAavePosition(testUser, 1e18, 1000e6);
 
-        // 通过我们的 AaveIntegration 读取真实 HF
+        // Read real HF via our AaveIntegration
         uint256 hf = aaveIntegration.getHealthFactor(testUser);
         emit log_named_uint("Real HF from Aave", hf);
         assertGt(hf, 1e18, "HF should be > 1.0 for healthy position");
 
-        // 读取真实债务
+        // Read real debt
         uint256 debt = aaveIntegration.getUserDebt(testUser);
         emit log_named_uint("Real debt from Aave", debt);
-        // Aave 精度舍入可能导致 debt 差 1 wei，用近似判断
+        // Aave precision rounding may cause 1 wei difference; use approximate assertion
         assertGe(debt, 999e6, "Debt should be approximately the borrowed amount");
     }
 
-    // ========== 暂停阻止执行 ==========
+    // ========== Pause blocks execution ==========
 
     function test_PauseBlocksExecution() public {
         _createAavePosition(testUser, 1e18, 1500e6);

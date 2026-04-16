@@ -3,11 +3,11 @@ pragma solidity ^0.8.20;
 
 contract GuardianRegistry {
     struct Policy {
-        uint256 healthFactorThreshold; // 触发阈值，e.g. 1.3e18 (18位小数，Aave标准)
-        uint256 maxRepayPerTx;         // 单次最大还款 USDC (6位小数, e.g. 500e6)
-        uint256 cooldownPeriod;        // 两次操作冷却期 (seconds, 最短3600=1小时)
-        uint256 lastExecutionTime;     // 上次执行时间戳
-        bool active;                   // 策略是否激活
+        uint256 healthFactorThreshold; // Trigger threshold, e.g. 1.3e18 (18 decimals, Aave standard)
+        uint256 maxRepayPerTx;         // Max repayment per tx in USDC (6 decimals, e.g. 500e6)
+        uint256 cooldownPeriod;        // Cooldown between executions (seconds, min 3600 = 1 hour)
+        uint256 lastExecutionTime;     // Timestamp of last execution
+        bool active;                   // Whether the policy is active
     }
 
     mapping(address => Policy) public policies;
@@ -35,10 +35,10 @@ contract GuardianRegistry {
     }
 
     // setPolicy
-    // 用户自己调用，设置保护策略，三个参数：
-    // healthFactorThreshold — 健康因子阈值（1.05~1.8），低于这个值就触发保护操作
-    // maxRepayPerTx — 单次最多还多少 USDC，防止一次还太多
-    // cooldownPeriod — 冷却时间（最少 1 小时），防止频繁操作
+    // Called by the user to configure their protection policy with three parameters:
+    // healthFactorThreshold — Health factor threshold (1.05~1.8); protection triggers when HF drops below this value
+    // maxRepayPerTx — Max USDC to repay per transaction, prevents repaying too much at once
+    // cooldownPeriod — Cooldown duration (min 1 hour), prevents frequent executions
     function setPolicy(
         uint256 healthFactorThreshold,
         uint256 maxRepayPerTx,
@@ -76,7 +76,7 @@ contract GuardianRegistry {
         return registeredUsers;
     }
 
-    // Vault 替用户执行完一次还款后，回调这个函数更新 lastExecutionTime，用来配合 cooldownPeriod 做冷却判断。
+    // Called by the Vault after executing a repayment on behalf of the user, updates lastExecutionTime for cooldown enforcement.
     function recordExecution(address user) external onlyVault {
         policies[user].lastExecutionTime = block.timestamp;
     }

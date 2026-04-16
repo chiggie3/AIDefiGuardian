@@ -86,7 +86,7 @@ contract AaveIntegrationTest is Test {
 
     function test_RepayOnBehalf_ApprovesAndRepays() public {
         uint256 repayAmount = 500e6;
-        // 给 AaveIntegration 合约 mint USDC（模拟 Vault 转入）
+        // Mint USDC to the AaveIntegration contract (simulating transfer from Vault)
         usdc.mint(address(integration), repayAmount);
 
         vm.prank(vaultAddr);
@@ -96,7 +96,7 @@ contract AaveIntegrationTest is Test {
         assertEq(mockPool.lastRepayUser(), user1);
         assertEq(mockPool.lastRepayAsset(), address(usdc));
         assertEq(mockPool.repayCallCount(), 1);
-        // USDC 从 integration 转到了 mockPool
+        // USDC transferred from integration to mockPool
         assertEq(usdc.balanceOf(address(integration)), 0);
         assertEq(usdc.balanceOf(address(mockPool)), repayAmount);
     }
@@ -128,7 +128,7 @@ contract AaveIntegrationTest is Test {
         assertEq(usdc.balanceOf(address(mockPool)), 500e6);
     }
 
-    // ========== immutable 字段 ==========
+    // ========== immutable fields ==========
 
     function test_Immutables() public view {
         assertEq(address(integration.aavePool()), address(mockPool));
