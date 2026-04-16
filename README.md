@@ -4,10 +4,13 @@ AI-powered liquidation protection for Aave V3. Users deposit a protection budget
 
 **Key difference from rule-based tools like DeFi Saver:** Every decision includes AI reasoning permanently recorded on-chain via contract events — anyone can audit exactly why the AI acted.
 
+> **See it in action:** [Full Demo Walkthrough](DEMO.md) — Health Factor **1.15 (Danger) → 1.76 (Safe)**, fully automated with screenshots.
+
 ---
 
 ## Table of Contents
 
+- [Demo](#demo)
 - [How It Works](#how-it-works)
 - [Architecture](#architecture)
 - [Smart Contracts](#smart-contracts)
@@ -19,6 +22,23 @@ AI-powered liquidation protection for Aave V3. Users deposit a protection budget
 - [Local Development](#local-development)
 - [Project Structure](#project-structure)
 - [License](#license)
+
+---
+
+## Demo
+
+![Dashboard — HF recovered after AI protection](docs/images/06-dashboard-recovered.png)
+
+The AI Agent detected a dangerous Aave position (HF 1.15), called Claude for a risk assessment, and automatically repaid 500 USDC — pushing the health factor from **1.15 to 1.76** in a single transaction.
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Health Factor | 1.150 (Danger) | **1.764 (Safe)** |
+| Total Debt | $1,434.78 | $935.32 |
+| Protection Budget | 1000 USDC | 500 USDC |
+| Current LTV | 71.7% | 46.8% |
+
+**[See the full demo walkthrough with screenshots →](DEMO.md)**
 
 ---
 
@@ -320,37 +340,42 @@ forge test --match-contract GuardianForkTest -vvv
 cd frontend && npx tsc --noEmit && npx vite build
 ```
 
-### 4. Full End-to-End Testing (Anvil Fork)
+### 4. Full End-to-End Demo (Anvil Fork)
 
 Since Sepolia Aave V3 reserves are frozen, use an Anvil fork for complete testing:
 
 **Terminal 1 — Start Anvil fork:**
 ```bash
 source .env
-anvil --fork-url $SEPOLIA_RPC_URL --port 8545
+anvil --fork-url $SEPOLIA_RPC_URL
 ```
 
-**Terminal 2 — Set up test position:**
+**Terminal 2 — One-click setup:**
+```bash
+./script/setup-demo.sh
+```
 
-Follow [FORK_TEST_GUIDE.md](FORK_TEST_GUIDE.md) steps 0-5 to create a low-HF Aave position on the fork (unfreeze USDC, inject liquidity, supply WETH, borrow USDC to bring HF to ~1.15).
+This script automatically unfreezes Aave USDC, injects liquidity, creates a test position with HF ~1.15 using Anvil account 1.
 
 **Terminal 3 — Start frontend:**
 ```bash
-cd frontend && nvm use 20 && npm run dev
+cd frontend && npm run dev
 ```
 
 **In the browser (http://localhost:5173):**
 1. Configure MetaMask: Sepolia network RPC → `http://127.0.0.1:8545`
-2. Import Anvil account 0: `0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80`
-3. **Setup page** → set policy (threshold 1.3, max repay 500, cooldown 60 min) + deposit USDC
-4. **Dashboard** → verify HF, position data, budget adequacy display correctly
+2. Import Anvil account 1 (private key in setup script output)
+3. **Setup page** → set policy (threshold 1.3, max repay 500, cooldown 60 min) + deposit 1000 USDC
+4. **Dashboard** → verify HF ~1.15, position data, budget adequacy
 
 **Terminal 4 — Run AI Agent:**
 ```bash
 cd agent && MAX_CYCLES=1 npx ts-node src/index.ts
 ```
 
-The agent detects HF 1.15 < threshold 1.3, calls Claude, executes a 500 USDC repayment. Check **Action Log** page to see the event with AI reasoning.
+The agent detects HF 1.15 < threshold 1.3, calls Claude, executes a 500 USDC repayment → HF recovers to ~1.76. Check **Action Log** page to see the event with AI reasoning.
+
+**[Full walkthrough with screenshots →](DEMO.md)**
 
 ---
 
@@ -374,7 +399,8 @@ test/                           — Foundry tests
       └── MockERC20.sol         — Mintable ERC20 mock
 script/
   ├── Deploy.s.sol              — 5-step deployment (breaks circular deps)
-  └── interact.sh               — CLI helpers for cast commands
+  ├── interact.sh               — CLI helpers for cast commands
+  └── setup-demo.sh             — One-click Anvil fork demo setup
 agent/                          — AI Agent (TypeScript)
   ├── src/
   │   ├── ai.ts                 — Claude API call + JSON parsing + fail-safe
@@ -393,6 +419,9 @@ frontend/                       — React frontend
   │   ├── components/           — Layout, HfGauge (SVG), StatusBadge
   │   └── pages/                — Dashboard, Setup, ActionLog
   └── .env.example
+docs/
+  └── images/                   — Demo screenshots (referenced by DEMO.md)
+DEMO.md                         — End-to-end demo walkthrough with screenshots
 ```
 
 ---
